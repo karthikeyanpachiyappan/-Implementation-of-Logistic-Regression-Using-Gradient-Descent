@@ -1,123 +1,73 @@
-# Implementation-of-Logistic-Regression-Using-Gradient-Descent
+# MONTE CARLO CONTROL ALGORITHM
 
-## AIM:
-To write a program to implement the the Logistic Regression Using Gradient Descent.
+## AIM
+To implement Monte Carlo Control to learn an optimal policy in a grid environment and evaluate its performance in terms of goal-reaching probability and average return.
 
-## Equipments Required:
-1. Hardware – PCs
-2. Anaconda – Python 3.7 Installation / Jupyter notebook
+## PROBLEM STATEMENT
+The task involves solving a Markov Decision Process (MDP) using Monte Carlo Control. The environment is likely a grid world where an agent must navigate through states to reach a goal while maximizing returns. The goal is to compute an optimal policy that achieves the highest probability of success (reaching the goal) and maximizes the average undiscounted return.
 
-## Algorithm
-1. Import the required libraries.
-2. Load the dataset.
-3. Define X and Y array.
-4. Define a function for costFunction,cost and gradient.
-5. Define a function to plot the decision boundary.
-6. Define a function to predict the Regression value.
+## MONTE CARLO CONTROL ALGORITHM
 
-## Program:
+Initialize the policy randomly.
+
+Generate episodes: Simulate episodes in the environment using the current policy.
+
+Update action-value function Q(s,a): For each state-action pair encountered in the episode, update the expected return based on the actual rewards received during the episode.
+
+Policy improvement: Update the policy greedily based on the updated action-value estimates.
+
+Repeat the process until convergence.
+
+
+## MONTE CARLO CONTROL FUNCTION
 ```
-/*
-Program to implement the the Logistic Regression Using Gradient Descent.
-Developed by: KARTHIKEYAN P
-RegisterNumber:212223230102
-*/
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-dataset=pd.read_csv("Placement_Data.csv")
-dataset
+from tqdm import tqdm
+def mc_control(env, gamma=1.0,
+               init_alpha=0.5, min_alpha=0.01, alpha_decay_ratio=0.5,
+               init_epsilon=1.0, min_epsilon=0.1, epsilon_decay_ratio=0.9,
+               n_episodes=3000, max_steps=200, first_visit=True):
 
-#dropping the serial no and salary col
-dataset=dataset.drop("sl_no",axis=1)
-dataset=dataset.drop("salary",axis=1)
+    ns, na = env.observation_space.n, env.action_space.n
+    discounts = np.logspace(0, max_steps, num=max_steps, base=gamma, endpoint=False)
+    alphas = decay_schedule(init_alpha, min_alpha, alpha_decay_ratio, n_episodes)
+    epsilons = decay_schedule(init_epsilon, min_epsilon, epsilon_decay_ratio, n_episodes)
 
-dataset["gender"]=dataset["gender"].astype('category')
-dataset["ssc_b"]=dataset["ssc_b"].astype('category')
-dataset["hsc_b"]=dataset["hsc_b"].astype('category')
-dataset["degree_t"]=dataset["degree_t"].astype('category')
-dataset["workex"]=dataset["workex"].astype('category')
-dataset["specialisation"]=dataset["specialisation"].astype('category')
-dataset["status"]=dataset["status"].astype('category')
-dataset["hsc_s"]=dataset["hsc_s"].astype('category')
-dataset.dtypes
+    Q = np.zeros((ns, na), dtype=np.float64)
+    Q_track = np.zeros((n_episodes, ns, na), dtype=np.float64)
+    pi_track = []
 
-#labelling the columns
-dataset["gender"]=dataset["gender"].cat.codes
-dataset["ssc_b"]=dataset["ssc_b"].cat.codes
-dataset["hsc_b"]=dataset["hsc_b"].cat.codes
-dataset["degree_t"]=dataset["degree_t"].cat.codes
-dataset["workex"]=dataset["workex"].cat.codes
-dataset["specialisation"]=dataset["specialisation"].cat.codes
-dataset["status"]=dataset["status"].cat.codes
-dataset["hsc_s"]=dataset["hsc_s"].cat.codes
-dataset
+    select_action = lambda state, Q, epsilon: np.argmax(Q[state]) if np.random.random() > epsilon else np.random.randint(len(Q[state]))
 
-#selecting the features and labels
-X=dataset.iloc[:,:-1].values
-Y=dataset.iloc[:,-1].values
-#display independent variable
-Y
+    for e in tqdm(range(n_episodes), leave=False):
+        trajectory = generate_trajectory(select_action, Q, epsilons[e], env, max_steps)
+        visited = np.zeros((ns, na), dtype=bool)
 
-#initialize the model parameters
-theta=np.random.randn(X.shape[1])
-y=Y
-#define the sigmoid function
-def sigmoid(z):
-    return 1/(1+np.exp(-z))
-#define the loss function
-def loss(theta,X,y):
-    h=sigmoid(X.dot(theta))
-    return -np.sum(y*np.log(h)+(1-y)*np.log(1-h))
+        for t, (state, action, reward, _, _) in enumerate(trajectory):
+            if visited[state][action] and first_visit:
+                continue
+            visited[state][action] = True
+            n_steps = len(trajectory[t:])
+            G = np.sum(discounts[:n_steps] * np.array([x[2] for x in trajectory[t:]]))
+            Q[state][action] += alphas[e] * (G - Q[state][action])
 
-#defining the gradient descent algorithm.
-def gradient_descent(theta,X,y,alpha,num_iterations):
-    m = len(y)
-    for i in range(num_iterations):
-        h = sigmoid(X.dot(theta))
-        gradient = X.T.dot(h-y)/m
-        theta -= alpha*gradient
-    return theta
-#train the model
-theta = gradient_descent(theta,X,y,alpha=0.01,num_iterations=1000)
-#makeprev \dictions
-def predict(theta,X):
-    h = sigmoid(X.dot(theta))
-    y_pred = np.where(h>=0.5,1,0)
-    return y_pred
-y_pred = predict(theta,X)
+        Q_track[e] = Q
+        pi_track.append(np.argmax(Q, axis=1))
 
-
-accuracy=np.mean(y_pred.flatten()==y)
-print("Accuracy:",accuracy)
-print(Y)
-
-xnew=np.array([[0,87,0,95,0,2,78,2,0,0,1,0]])
-y_prednew=predict(theta,xnew)
-print(y_prednew)
-
-xnew=np.array([[0,0,0,0,0,2,8,2,0,0,1,0]])
-y_prednew=predict(theta,xnew)
-print(y_prednew)
+    V = np.max(Q, axis=1)
+    pi = lambda s: np.argmax(Q[s])
+    return Q, V, pi, Q_track, pi_track
 ```
 
-## Output:
-# Read the file and display
-![image](https://github.com/user-attachments/assets/5569de72-a2c8-4235-a94c-de14b41495b2)
-# Categorizing columns
-![image](https://github.com/user-attachments/assets/c500eead-0168-4c22-afbd-05185555f101)
-# Labelling columns and displaying dataset
-![image](https://github.com/user-attachments/assets/f52747ea-62e9-4dd0-be33-cb811808f0d7)
-# Display dependent variable
-![image](https://github.com/user-attachments/assets/343c1cfd-28f3-4c13-97c9-494730710436)
-# Printing accuracy
-![image](https://github.com/user-attachments/assets/09d6f49e-3c26-48d2-b92c-a6c2d7a34d1f)
-# Printing Y
-![image](https://github.com/user-attachments/assets/2c20ffff-3024-4d98-b8e5-9e729ec85431)
-# Printing y_prednew
-![image](https://github.com/user-attachments/assets/2c6a89c8-af31-46d6-bf2b-7e257eda40e3)
+## OUTPUT:
+![Screenshot 2025-04-25 144431](https://github.com/user-attachments/assets/a27071d5-fda8-4118-bff2-0e060b3a790e)
 
+![Screenshot 2025-04-25 144435](https://github.com/user-attachments/assets/9bfa5570-7970-470d-a5fa-39e5c7af3d04)
 
-## Result:
-Thus the program to implement the the Logistic Regression Using Gradient Descent is written and verified using python programming.
+### Name: KARTHIKEYAN P
+### Register Number:212223230102
 
+Mention the Action value function, optimal value function, optimal policy, and success rate for the optimal policy.
+
+## RESULT:
+
+Thus to implement Monte Carlo Control to learn an optimal policy in a grid environment and evaluate its performance in terms of goal-reaching probability and average return is executed successfully.
